@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import Papa from "papaparse";
-import { RefreshCw, AlertTriangle, CheckCircle2, Loader2 } from "lucide-react";
+import { RefreshCw, AlertTriangle, CheckCircle2, Loader2, Search, X, ChevronDown } from "lucide-react";
 
 const DATA_PA_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vTkR8KkJN0h2go9xG9rE1JQ-f-jBB7Ne8ssTo5jFftGDtbhz0lpLnp4Q3ssDcyRXHjuTDxx7euPVlhy/pub?gid=1909267783&single=true&output=csv";
@@ -151,6 +151,165 @@ function StatPill({ label, value }) {
       <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: "1.05rem", color: "var(--text-hi)", marginTop: "2px" }}>
         {value}
       </div>
+    </div>
+  );
+}
+
+function SearchableSelect({ value, onChange, options, placeholder, style }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+  const blurTimeout = useRef(null);
+
+  const filtered = useMemo(() => {
+    if (!query) return options;
+    const q = query.toLowerCase();
+    return options.filter((o) => o.toLowerCase().includes(q));
+  }, [query, options]);
+
+  const commit = (val) => {
+    onChange(val);
+    setQuery("");
+    setOpen(false);
+    inputRef.current?.blur();
+  };
+
+  const handleBlur = () => {
+    blurTimeout.current = setTimeout(() => {
+      setOpen(false);
+      setQuery("");
+    }, 120);
+  };
+
+  const handleFocus = () => {
+    if (blurTimeout.current) clearTimeout(blurTimeout.current);
+    setOpen(true);
+    setHighlight(0);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => Math.min(h + 1, filtered.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (filtered[highlight]) commit(filtered[highlight]);
+    } else if (e.key === "Escape") {
+      inputRef.current?.blur();
+    }
+  };
+
+  return (
+    <div ref={wrapRef} style={{ position: "relative", ...style }}>
+      <div style={{ position: "relative" }}>
+        <Search
+          size={15}
+          color="var(--text-mid)"
+          style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+        />
+        <input
+          ref={inputRef}
+          value={open ? query : value || ""}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setHighlight(0);
+            if (!open) setOpen(true);
+          }}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          style={{
+            width: "100%",
+            background: "var(--bg-panel-alt)",
+            border: "1px solid var(--border)",
+            color: "var(--text-hi)",
+            borderRadius: "9px",
+            padding: "11px 34px 11px 34px",
+            fontSize: "0.9rem",
+            boxSizing: "border-box",
+          }}
+        />
+        {value && !open && (
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              onChange("");
+              setQuery("");
+            }}
+            style={{
+              position: "absolute",
+              right: "10px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "none",
+              border: "none",
+              color: "var(--text-mid)",
+              cursor: "pointer",
+              display: "flex",
+              padding: "2px",
+            }}
+            aria-label="Hapus pilihan"
+          >
+            <X size={14} />
+          </button>
+        )}
+        {!value && (
+          <ChevronDown
+            size={15}
+            color="var(--text-mid)"
+            style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
+          />
+        )}
+      </div>
+
+      {open && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            background: "var(--bg-panel-alt)",
+            border: "1px solid var(--border)",
+            borderRadius: "10px",
+            maxHeight: "220px",
+            overflowY: "auto",
+            zIndex: 20,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+          }}
+        >
+          {filtered.length === 0 ? (
+            <div style={{ padding: "12px 14px", fontSize: "0.8rem", color: "var(--text-mid)" }}>Tidak ditemukan</div>
+          ) : (
+            filtered.map((opt, i) => (
+              <div
+                key={opt}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  commit(opt);
+                }}
+                style={{
+                  padding: "10px 14px",
+                  fontSize: "0.88rem",
+                  cursor: "pointer",
+                  background: i === highlight ? "var(--bg-panel)" : "transparent",
+                  color: opt === value ? "var(--acc-teal)" : "var(--text-hi)",
+                  borderBottom: i !== filtered.length - 1 ? "1px solid var(--border)" : "none",
+                }}
+                onMouseEnter={() => setHighlight(i)}
+              >
+                {opt}
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -425,27 +584,13 @@ export default function App() {
             {/* STAGE 1 */}
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: "14px", padding: "20px", marginBottom: "16px" }}>
               <StageLabel n={1} title="Pilih Style" done={!!paInfo} />
-              <select
+              <SearchableSelect
                 value={selectedStyle}
-                onChange={(e) => setSelectedStyle(e.target.value)}
-                style={{
-                  width: "100%",
-                  background: "var(--bg-panel-alt)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text-hi)",
-                  borderRadius: "9px",
-                  padding: "11px 12px",
-                  fontSize: "0.9rem",
-                  marginBottom: paInfo ? "16px" : 0,
-                }}
-              >
-                <option value="">— Pilih style —</option>
-                {styleList.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelectedStyle}
+                options={styleList}
+                placeholder="Ketik untuk cari style..."
+                style={{ marginBottom: paInfo ? "16px" : 0 }}
+              />
 
               {paInfo && (
                 <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -462,26 +607,13 @@ export default function App() {
             <div style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: "14px", padding: "20px", marginBottom: "16px" }}>
               <StageLabel n={2} title="Pilih Line" done={!!h1 && h1.found} />
               <div style={{ display: "flex", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
-                <select
+                <SearchableSelect
                   value={selectedLine}
-                  onChange={(e) => setSelectedLine(e.target.value)}
-                  style={{
-                    flex: "1 1 180px",
-                    background: "var(--bg-panel-alt)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-hi)",
-                    borderRadius: "9px",
-                    padding: "11px 12px",
-                    fontSize: "0.9rem",
-                  }}
-                >
-                  <option value="">— Pilih line —</option>
-                  {lineList.map((l) => (
-                    <option key={l} value={l}>
-                      {l}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSelectedLine}
+                  options={lineList}
+                  placeholder="Ketik untuk cari line..."
+                  style={{ flex: "1 1 180px" }}
+                />
                 <input
                   type="date"
                   value={overrideDate}
