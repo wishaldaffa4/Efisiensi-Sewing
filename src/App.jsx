@@ -28,9 +28,16 @@ function parseDateFlexible(raw) {
   const s = String(raw).trim();
   let m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (m) {
-    let [, d, mo, y] = m;
+    let [, a, b, y] = m;
     if (y.length === 2) y = "20" + y;
-    return new Date(Number(y), Number(mo) - 1, Number(d));
+    // Sheet ini memakai format MM/DD/YYYY (bulan lebih dulu)
+    let month = Number(a);
+    let day = Number(b);
+    // Fallback: kalau "bulan" > 12 (berarti sebenarnya DD/MM), tukar posisinya
+    if (month > 12 && day <= 12) {
+      [month, day] = [day, month];
+    }
+    return new Date(Number(y), month - 1, day);
   }
   m = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
   if (m) {
